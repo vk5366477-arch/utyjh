@@ -3591,12 +3591,12 @@
       "imports": [],
       "format": "cjs"
     },
-    ".open-next/server-functions/default/.next/server/app/api/batches/[batchId]/today/route_client-reference-manifest.js": {
+    ".open-next/server-functions/default/.next/server/app/api/batches/[batchId]/tests/route_client-reference-manifest.js": {
       "bytes": 355,
       "imports": [],
       "format": "cjs"
     },
-    ".open-next/server-functions/default/.next/server/app/api/batches/[batchId]/tests/route_client-reference-manifest.js": {
+    ".open-next/server-functions/default/.next/server/app/api/batches/[batchId]/today/route_client-reference-manifest.js": {
       "bytes": 355,
       "imports": [],
       "format": "cjs"
@@ -3715,14 +3715,14 @@
           "original": "/home/project/.open-next/server-functions/default/.next/server/app/api/batches/[batchId]/announcements/route_client-reference-manifest.js"
         },
         {
-          "path": ".open-next/server-functions/default/.next/server/app/api/batches/[batchId]/today/route_client-reference-manifest.js",
-          "kind": "require-call",
-          "original": "/home/project/.open-next/server-functions/default/.next/server/app/api/batches/[batchId]/today/route_client-reference-manifest.js"
-        },
-        {
           "path": ".open-next/server-functions/default/.next/server/app/api/batches/[batchId]/tests/route_client-reference-manifest.js",
           "kind": "require-call",
           "original": "/home/project/.open-next/server-functions/default/.next/server/app/api/batches/[batchId]/tests/route_client-reference-manifest.js"
+        },
+        {
+          "path": ".open-next/server-functions/default/.next/server/app/api/batches/[batchId]/today/route_client-reference-manifest.js",
+          "kind": "require-call",
+          "original": "/home/project/.open-next/server-functions/default/.next/server/app/api/batches/[batchId]/today/route_client-reference-manifest.js"
         },
         {
           "path": ".open-next/server-functions/default/.next/server/app/api/hls/[folder]/[...path]/route_client-reference-manifest.js",
@@ -9393,10 +9393,10 @@
         ".open-next/server-functions/default/.next/server/app/api/batches/[batchId]/announcements/route_client-reference-manifest.js": {
           "bytesInOutput": 554
         },
-        ".open-next/server-functions/default/.next/server/app/api/batches/[batchId]/today/route_client-reference-manifest.js": {
+        ".open-next/server-functions/default/.next/server/app/api/batches/[batchId]/tests/route_client-reference-manifest.js": {
           "bytesInOutput": 530
         },
-        ".open-next/server-functions/default/.next/server/app/api/batches/[batchId]/tests/route_client-reference-manifest.js": {
+        ".open-next/server-functions/default/.next/server/app/api/batches/[batchId]/today/route_client-reference-manifest.js": {
           "bytesInOutput": 530
         },
         ".open-next/server-functions/default/.next/server/app/api/hls/[folder]/[...path]/route_client-reference-manifest.js": {

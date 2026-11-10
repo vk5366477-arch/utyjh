@@ -7,7 +7,7 @@
     "build": "next build --webpack",
     "build:cloudflare": "npx opennextjs-cloudflare build",
     "preview": "npx wrangler pages dev",
-    "deploy": "npm run build:cloudflare && npx wrangler pages deploy .open-next",
+    "deploy": "npm run build:cloudflare && npx wrangler deploy",
     "start": "next start",
     "lint": "eslint .",
     "db:push": "prisma db push --accept-data-loss",
