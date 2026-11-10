@@ -1,0 +1,132 @@
+// Study Bison — database schema
+// SQLite via Prisma. Stores user study state (watch history, bookmarks)
+// and a local catalog cache so the app stays fast and resilient.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Recently watched lectures — powers "Continue Watching" on the dashboard
+model WatchHistory {
+  id           String   @id @default(cuid())
+  userId       String   @default("local")
+  batchId      String
+  batchName    String
+  batchImage   String?
+  subjectId    String
+  subjectName  String
+  subjectSlug  String
+  topicId      String?
+  topicName    String?
+  contentId    String
+  lectureTitle String
+  videoId      String?  // YouTube video id or direct URL
+  videoType    String   @default("youtube")
+  thumbnail    String?
+  duration     String?
+  positionSec  Int      @default(0)
+  watchedAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId, contentId])
+  @@index([userId, watchedAt])
+}
+
+// Bookmarked lectures / saved notes
+model Bookmark {
+  id           String   @id @default(cuid())
+  userId       String   @default("local")
+  kind         String   @default("lecture") // lecture | note | batch
+  batchId      String
+  batchName    String
+  subjectName  String?
+  contentId    String
+  title        String
+  subtitle     String?
+  url          String?  // video id or pdf url
+  urlType      String?
+  thumbnail    String?
+  createdAt    DateTime @default(now())
+
+  @@unique([userId, kind, contentId])
+  @@index([userId, createdAt])
+}
+
+// Local cache of the public batch catalog (resilience layer)
+model CatalogCache {
+  id        String   @id @default("batches")
+  payload   String   // raw JSON
+  fetchedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Timestamped notes created while watching a video
+model VideoNote {
+  id         String   @id @default(cuid())
+  userId     String   @default("local")
+  contentId  String
+  batchId    String
+  subjectSlug String
+  timestamp  Int      // seconds into the video
+  text       String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId, contentId])
+  @@index([userId, contentId, timestamp])
+}
+
+// Per-lecture doubt wall — questions at specific timestamps
+model Doubt {
+  id         String   @id @default(cuid())
+  userId     String   @default("local")
+  userName   String   @default("Learner")
+  contentId  String
+  batchId    String
+  subjectSlug String
+  timestamp  Int      @default(0) // seconds into video, 0 = general
+  text       String
+  replyToId  String?  // null = top-level question, string = reply
+  createdAt  DateTime @default(now())
+
+  @@index([contentId, createdAt])
+  @@index([replyToId])
+}
+
+// Practice quiz attempts from PDF notes
+model PracticeAttempt {
+  id         String   @id @default(cuid())
+  userId     String   @default("local")
+  contentId  String
+  batchId    String
+  questions  String   // JSON array of {q, options, answer, userAnswer}
+  score      Int      @default(0)
+  total      Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([userId, contentId])
+}
+
+// Downloaded content cache metadata (offline access)
+model DownloadCache {
+  id         String   @id @default(cuid())
+  userId     String   @default("local")
+  contentId  String
+  batchId    String
+  lectureTitle String
+  kind       String   // "video" | "pdf"
+  url        String
+  fileSize   Int      @default(0)
+  status     String   @default("pending") // pending | downloading | complete | failed
+  filePath   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, contentId, kind])
+  @@index([userId, status])
+}
