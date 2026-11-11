@@ -10,11 +10,14 @@ type TestsResponse = {
         name?: string;
         slug?: string;
         totalQuestions?: number;
+        totalMarks?: number;
         marks?: number;
         duration?: string | number;
         testType?: string;
         type?: string;
         currentType?: string;
+        startTime?: string;
+        maxStartTime?: string;
         startDate?: string;
         expiresOn?: string;
         isScheduled?: boolean;
@@ -46,11 +49,11 @@ export async function GET(
           id: t._id,
           name: t.name ?? "Test",
           totalQuestions: t.totalQuestions ?? 0,
-          marks: t.marks ?? 0,
+          marks: t.totalMarks ?? t.marks ?? 0,
           duration: typeof t.duration === "number" ? `${t.duration} min` : t.duration ?? "",
           type: t.currentType ?? t.testType ?? t.type ?? "Test",
-          startDate: t.startDate ?? "",
-          expiresOn: t.expiresOn ?? "",
+          startDate: t.startTime ?? t.startDate ?? "",
+          expiresOn: t.maxStartTime ?? t.expiresOn ?? "",
           subjects: (t.subjects ?? []).map((s) => s.name ?? "").filter(Boolean),
         })),
       });

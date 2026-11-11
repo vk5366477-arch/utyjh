@@ -6,6 +6,7 @@ import { getEnrolledBatchIds } from "@/lib/firebase";
 import { useAuth } from "@/hooks/use-auth";
 import { GlassBadge, GlassButton, GlassCard, GlassSkeleton, SafeImage, EmptyState } from "./glass";
 import { ContinueWatching } from "./continue-watching";
+import { TelegramJoinButton } from "./telegram-popup";
 import {
   Radio,
   ChevronRight,
@@ -185,16 +186,18 @@ export function HomeView() {
               {liveCount > 0 ? `${liveCount} live now` : "All scheduled classes for the selected batch."}
             </p>
           </div>
-          {selectedBatchId && (
-            <GlassButton
-              variant="secondary"
-              size="md"
-              className="self-start sm:self-auto"
-              onClick={() => navigate({ view: "batch", batchId: selectedBatchId, batchName: selectedBatch?.name, tab: "today" })}
-            >
-              View all classes <ChevronRight size={16} />
-            </GlassButton>
-          )}
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            <TelegramJoinButton />
+            {selectedBatchId && (
+              <GlassButton
+                variant="secondary"
+                size="md"
+                onClick={() => navigate({ view: "batch", batchId: selectedBatchId, batchName: selectedBatch?.name, tab: "today" })}
+              >
+                View all classes <ChevronRight size={16} />
+              </GlassButton>
+            )}
+          </div>
         </header>
 
         {/* Batch selector */}
@@ -247,11 +250,16 @@ function LivePreviewCard({ liveClass, onOpen }: { liveClass: LiveClass; onOpen: 
         onClick={onOpen}
         className="group flex w-full cursor-pointer flex-col text-left"
       >
-        <div className="relative aspect-square w-full overflow-hidden bg-muted">
+        <div className="relative aspect-square w-full overflow-hidden bg-ink-950">
+          <SafeImage
+            src={liveClass.thumbnail}
+            alt=""
+            className="absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-xl"
+          />
           <SafeImage
             src={liveClass.thumbnail}
             alt={liveClass.title}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            className="relative h-full w-full object-contain transition-transform duration-500 group-hover:scale-105"
           />
           <span className="absolute inset-0 flex items-center justify-center bg-ink-950/20 transition-colors duration-200 group-hover:bg-ink-950/35">
             <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-transform duration-200 group-hover:scale-110">

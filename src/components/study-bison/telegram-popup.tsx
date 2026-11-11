@@ -4,9 +4,29 @@ import { useState } from "react";
 import { Send } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { GlassButton } from "./glass";
+import { cn } from "@/lib/utils";
 
-const TELEGRAM_URL = "https://t.me/quanticaofficial";
+export const TELEGRAM_URL = "https://t.me/quanticaofficial";
 const joinedKey = (uid: string) => `quantica:telegram-joined:${uid}`;
+
+export function TelegramJoinButton({ className }: { className?: string }) {
+  return (
+    <a
+      href={TELEGRAM_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="Join our Telegram community"
+      title="Join our Telegram community"
+      className={cn(
+        "inline-flex h-9 cursor-pointer items-center gap-2 rounded-full bg-[#1C7FB5] px-3.5 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:brightness-110 active:translate-y-0",
+        className
+      )}
+    >
+      <Send size={15} />
+      <span className="hidden sm:inline">Join Telegram</span>
+    </a>
+  );
+}
 
 // Blocks every signed-in learner until they tap "Join".
 export function TelegramPopup() {

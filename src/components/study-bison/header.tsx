@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useApp, type ViewName } from "@/lib/store";
 import { signInWithGoogle } from "@/lib/firebase";
+import { TelegramJoinButton } from "./telegram-popup";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { BookOpen, GraduationCap, Home, LogIn, Moon, Sun, Trophy, User } from "lucide-react";
@@ -87,6 +88,8 @@ export function SiteHeader() {
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
+            <TelegramJoinButton />
+
             <button
               type="button"
               onClick={toggleTheme}
