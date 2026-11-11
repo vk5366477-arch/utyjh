@@ -227,7 +227,7 @@ export function HomeView() {
               hint={enrolledBatches.length === 0 ? "Enroll in a batch to see its classes here." : "Try another enrolled batch or check back later."}
             />
           ) : (
-            <div className="sb-fade-up space-y-3">
+            <div className="sb-fade-up sb-scroll -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
               {liveClasses.map((item) => <LivePreviewCard key={`${item.batchId}:${item.id}`} liveClass={item} onOpen={() => openLive(item)} />)}
             </div>
           )}
@@ -241,25 +241,25 @@ function LivePreviewCard({ liveClass, onOpen }: { liveClass: LiveClass; onOpen: 
   const isLive = liveClass.status === "live";
   const isEnded = liveClass.status === "ended";
   return (
-    <GlassCard hover className="overflow-hidden rounded-2xl">
+    <GlassCard hover className="w-56 shrink-0 snap-start overflow-hidden rounded-2xl sm:w-64">
       <button
         type="button"
         onClick={onOpen}
-        className="group flex w-full cursor-pointer items-center gap-4 p-4 text-left sm:p-5"
+        className="group flex w-full cursor-pointer flex-col text-left"
       >
-        <div className="relative aspect-video w-28 shrink-0 overflow-hidden rounded-xl border border-border bg-muted sm:w-40">
+        <div className="relative aspect-square w-full overflow-hidden bg-muted">
           <SafeImage
             src={liveClass.thumbnail}
             alt={liveClass.title}
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
-          <span className="absolute inset-0 flex items-center justify-center bg-ink-950/25">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-transform duration-200 group-hover:scale-110">
-              <Play size={14} className="ml-0.5" />
+          <span className="absolute inset-0 flex items-center justify-center bg-ink-950/20 transition-colors duration-200 group-hover:bg-ink-950/35">
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-transform duration-200 group-hover:scale-110">
+              <Play size={16} className="ml-0.5" />
             </span>
           </span>
         </div>
-        <div className="min-w-0 flex-1 space-y-2">
+        <div className="min-w-0 space-y-2 p-4">
           <div className="flex flex-wrap items-center gap-2">
             {isLive ? (
               <GlassBadge tone="danger"><Radio size={10} /> Live</GlassBadge>
@@ -270,7 +270,7 @@ function LivePreviewCard({ liveClass, onOpen }: { liveClass: LiveClass; onOpen: 
             )}
             <span className="truncate text-xs text-muted-foreground">{liveClass.batchName}</span>
           </div>
-          <p className="line-clamp-2 text-sm font-semibold leading-snug text-foreground sm:text-base">{liveClass.title}</p>
+          <p className="line-clamp-2 text-sm font-semibold leading-snug text-foreground">{liveClass.title}</p>
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <CalendarDays size={12} /> {fmtTime(liveClass.startTime)}
           </p>

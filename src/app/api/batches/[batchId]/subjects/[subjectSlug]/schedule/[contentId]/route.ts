@@ -132,28 +132,29 @@ export async function GET(
 ) {
   const { batchId, subjectSlug, contentId } = await params;
 
-  const res = await apiGet<ScheduleResponse>(
-    `/v1/batches/${batchId}/subject/${encodeURIComponent(subjectSlug)}/schedule/${contentId}`,
-    { ttl: TTL.schedule, timeoutMs: 20000 }
-  );
+  const [primary, mirror] = await Promise.all([
+    apiGet<ScheduleResponse>(
+      `/v1/batches/${batchId}/subject/${encodeURIComponent(subjectSlug)}/schedule/${contentId}`,
+      { ttl: TTL.schedule, timeoutMs: 10000 }
+    ),
+    lxpwGet<ScheduleResponse>(
+      `/Schedule?BatchId=${encodeURIComponent(batchId)}&SubjectId=${encodeURIComponent(subjectSlug)}&ContentId=${encodeURIComponent(contentId)}`,
+      10000
+    ),
+  ]);
 
-  const raw = res.data?.data;
+  const raw = primary.data?.data;
   if (raw) {
     return NextResponse.json(normalize(raw, contentId));
   }
 
-  // Fallback: LearnX PW mirror
-  const mirror = await lxpwGet<ScheduleResponse>(
-    `/Schedule?BatchId=${encodeURIComponent(batchId)}&SubjectId=${encodeURIComponent(subjectSlug)}&ContentId=${encodeURIComponent(contentId)}`,
-    18000
-  );
   const mraw = mirror?.data;
   if (mraw) {
     return NextResponse.json({ ...normalize(mraw, contentId), source: "learnxpw-mirror" });
   }
 
   return NextResponse.json(
-    { success: false, error: res.error ?? "Lecture not found" },
+    { success: false, error: primary.error ?? "Lecture not found" },
     { status: 502 }
   );
 }

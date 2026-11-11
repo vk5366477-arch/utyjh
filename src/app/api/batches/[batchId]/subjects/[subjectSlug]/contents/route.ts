@@ -127,14 +127,17 @@ async function mirrorContents(
     return { items: [], totalCount: 0 };
   }
   const items: ContentRow[] = [];
-  for (let page = 1; page <= maxPages * 2; page++) {
-    const d = await lxpwGet<{ data?: RawContent[] }>(
-      `/TopicInfo?BatchId=${encodeURIComponent(batchId)}&SubjectId=${encodeURIComponent(subjectSlug)}` +
-        `&TopicId=${encodeURIComponent(tag)}&ContentType=${contentType}&page=${page}`,
-      15000
-    );
+  const pages = await Promise.all(
+    Array.from({ length: maxPages * 2 }, (_, i) =>
+      lxpwGet<{ data?: RawContent[] }>(
+        `/TopicInfo?BatchId=${encodeURIComponent(batchId)}&SubjectId=${encodeURIComponent(subjectSlug)}` +
+          `&TopicId=${encodeURIComponent(tag)}&ContentType=${contentType}&page=${i + 1}`,
+        10000
+      )
+    )
+  );
+  for (const d of pages) {
     const arr = Array.isArray(d?.data) ? d!.data! : [];
-    if (arr.length === 0) break;
     for (const c of arr) items.push(mapRow(c, contentType));
   }
   return { items, totalCount: items.length };

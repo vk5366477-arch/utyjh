@@ -85,13 +85,21 @@ export async function GET(
     `/v2/batches/${encodedBatchId}/announcement?page=1`,
   ];
 
-  for (const path of variants) {
-    const res = await apiGet<UnknownResponse>(path, { ttl: TTL.misc, timeoutMs: 15000 });
-    const items = getItems(res.data);
-    if (items.length > 0) {
-      return NextResponse.json({ success: true, announcements: normalize(items), source: "primary", path });
-    }
-
+  const primary = await Promise.all(
+    variants.map((path) =>
+      apiGet<UnknownResponse>(path, { ttl: TTL.misc, timeoutMs: 8000 })
+        .then((res) => ({ path, items: getItems(res.data) }))
+        .catch(() => ({ path, items: [] as RawAnnouncement[] }))
+    )
+  );
+  const primaryHit = primary.find((r) => r.items.length > 0);
+  if (primaryHit) {
+    return NextResponse.json({
+      success: true,
+      announcements: normalize(primaryHit.items),
+      source: "primary",
+      path: primaryHit.path,
+    });
   }
 
   const mirrorPaths = [
@@ -100,17 +108,19 @@ export async function GET(
     `/BatchAnnouncements?BatchId=${encodedBatchId}`,
     `/AllAnnouncements?BatchId=${encodedBatchId}`,
   ];
-  for (const path of mirrorPaths) {
-    const mirror = await lxpwGet<UnknownResponse>(path, 15000);
-    const items = getItems(mirror);
-    if (items.length > 0) {
-      return NextResponse.json({
-        success: true,
-        announcements: normalize(items),
-        source: "learnxpw-mirror",
-        path,
-      });
-    }
+  const mirror = await Promise.all(
+    mirrorPaths.map((path) =>
+      lxpwGet<UnknownResponse>(path, 8000).then((payload) => ({ path, items: getItems(payload) }))
+    )
+  );
+  const mirrorHit = mirror.find((r) => r.items.length > 0);
+  if (mirrorHit) {
+    return NextResponse.json({
+      success: true,
+      announcements: normalize(mirrorHit.items),
+      source: "learnxpw-mirror",
+      path: mirrorHit.path,
+    });
   }
 
   return NextResponse.json({ success: true, announcements: [], source: "none" });
