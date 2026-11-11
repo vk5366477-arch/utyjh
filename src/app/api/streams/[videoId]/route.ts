@@ -131,8 +131,11 @@ export async function GET(
   // 1) Universal HLS chain (no pre-existing signature required)
   // ------------------------------------------------------------------
   const folder = parseVideoFolder(rawUrl);
+  const hlsProbe = folder ? probeHlsFolder(folder) : Promise.resolve(null);
+  const dashManifestPromise = isSignedUrl(rawUrl) ? deltaPlayFetch(rawUrl) : Promise.resolve(null);
+
   if (folder) {
-    const quality = await probeHlsFolder(folder);
+    const quality = await hlsProbe;
     if (quality) {
       return finish(
         {
@@ -154,7 +157,7 @@ export async function GET(
   // 2) Delta Gate DASH (requires the URL to carry its own signature)
   // ------------------------------------------------------------------
   if (isSignedUrl(rawUrl)) {
-    const manifest = await deltaPlayFetch(rawUrl);
+    const manifest = await dashManifestPromise;
     if (manifest) {
       const kid = extractKid(manifest);
       const sigQuery = rawUrl.split("?")[1] ?? "";

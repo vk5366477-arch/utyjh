@@ -5117,7 +5117,7 @@
       "format": "cjs"
     },
     ".open-next/server-functions/default/.next/server/app/api/streams/[videoId]/route.js": {
-      "bytes": 15191,
+      "bytes": 15257,
       "imports": [
         {
           "path": ".open-next/server-functions/default/node_modules/next/dist/shared/lib/router/utils/app-paths.js",
@@ -6051,7 +6051,7 @@
       "format": "cjs"
     },
     ".open-next/server-functions/default/.next/server/app/page.js": {
-      "bytes": 970930,
+      "bytes": 971122,
       "imports": [
         {
           "path": "url",
@@ -9565,7 +9565,7 @@
           "bytesInOutput": 14476
         },
         ".open-next/server-functions/default/.next/server/app/api/streams/[videoId]/route.js": {
-          "bytesInOutput": 15505
+          "bytesInOutput": 15575
         },
         ".open-next/server-functions/default/.next/server/app/api/tests/[testId]/route.js": {
           "bytesInOutput": 14135
@@ -9607,7 +9607,7 @@
           "bytesInOutput": 8156
         },
         ".open-next/server-functions/default/.next/server/app/page.js": {
-          "bytesInOutput": 1034975
+          "bytesInOutput": 1035175
         },
         ".open-next/server-functions/default/node_modules/next/dist/server/require.js": {
           "bytesInOutput": 5155
@@ -9784,7 +9784,7 @@
           "bytesInOutput": 70800
         }
       },
-      "bytes": 6604959
+      "bytes": 6605229
     }
   }
 }

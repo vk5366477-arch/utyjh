@@ -268,8 +268,16 @@ export function WatchView({
     }
   }, [contentId, savePosition]);
 
-  const openNote = (url: string, name: string) => { setPdfPanel({ url, name }); };
-  const handlePosition = useCallback((pos: number) => { savePosition(pos); }, [savePosition]);
+  const openNote = (url: string, name: string) => {
+    if (window.matchMedia("(min-width: 1024px)").matches) { setPdfPanel({ url, name }); return; }
+    navigate({ view: "pdf", batchId, subjectSlug, contentId, lectureTitle: name, videoId: url });
+  };
+  const lastSavedPosRef = useRef(-Infinity);
+  const handlePosition = useCallback((pos: number) => {
+    if (Math.abs(pos - lastSavedPosRef.current) < 15) return;
+    lastSavedPosRef.current = pos;
+    savePosition(pos);
+  }, [savePosition]);
 
   /* Determine the resolved stream to pass to the player */
   const resolvedStream: StreamResolution | null =
@@ -435,7 +443,6 @@ function NativePlayerCore({
   const speedRef = useRef(speed);
   const positionRef = useRef(onPosition);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const seekBarRef = useRef<HTMLDivElement>(null);
 
   const isYouTube = stream?.kind === "youtube";
 
@@ -720,10 +727,8 @@ function NativePlayerCore({
   };
 
   /* ---- seek bar ---- */
-  const seekFromPosition = (clientX: number) => {
-    const bar = seekBarRef.current;
-    if (!bar || !duration) return;
-    const rect = bar.getBoundingClientRect();
+  const seekToClientX = (clientX: number, rect: DOMRect) => {
+    if (!duration || rect.width <= 0) return;
     const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
     const t = ratio * duration;
     if (isYouTube) { ytPlayerRef.current?.seekTo(t, true); }
@@ -733,14 +738,16 @@ function NativePlayerCore({
 
   const onSeekPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault(); setIsScrubbing(true); setShowControls(true);
-    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-    seekFromPosition(e.clientX);
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    seekToClientX(e.clientX, e.currentTarget.getBoundingClientRect());
   };
-  const onSeekPointerMove = (e: React.PointerEvent<HTMLDivElement>) => { if (isScrubbing) seekFromPosition(e.clientX); };
+  const onSeekPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isScrubbing) seekToClientX(e.clientX, e.currentTarget.getBoundingClientRect());
+  };
   const onSeekPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isScrubbing) return; setIsScrubbing(false);
-    (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
-    seekFromPosition(e.clientX);
+    if (!isScrubbing) return;
+    setIsScrubbing(false);
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
   };
 
   if (!fallback) {
@@ -833,7 +840,7 @@ function NativePlayerCore({
         <div className={cn("absolute left-0 right-0 bottom-0 z-20 transition-opacity duration-300 md:hidden", showControls ? "opacity-100" : "opacity-0 pointer-events-none")}>
           <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/50 to-transparent pointer-events-none" />
           <div className="relative px-3 pb-3 pt-8">
-            <div ref={seekBarRef} className="group/seek relative h-6 flex items-center cursor-pointer touch-none" onPointerDown={onSeekPointerDown} onPointerMove={onSeekPointerMove} onPointerUp={onSeekPointerUp} role="slider" aria-label="Seek" aria-valuenow={Math.round(current)} aria-valuemin={0} aria-valuemax={Math.round(duration)} tabIndex={0}>
+            <div className="group/seek relative h-6 flex items-center cursor-pointer touch-none" onPointerDown={onSeekPointerDown} onPointerMove={onSeekPointerMove} onPointerUp={onSeekPointerUp} role="slider" aria-label="Seek" aria-valuenow={Math.round(current)} aria-valuemin={0} aria-valuemax={Math.round(duration)} tabIndex={0}>
               <div className="relative h-1 w-full rounded-full bg-white/25 overflow-hidden">
                 {bufferedPct > 0 && <div className="absolute top-0 left-0 h-full bg-white/35" style={{ width: `${bufferedPct}%` }} />}
                 <div className="absolute top-0 left-0 h-full bg-red-600 rounded-full" style={{ width: `${progressPct}%` }} />
@@ -882,9 +889,9 @@ function NativePlayerCore({
       {/* ---- Desktop controls ---- */}
       {!error && (
         <div className={cn("absolute left-0 right-0 bottom-0 z-20 hidden px-4 pb-3 pt-8 bg-gradient-to-t from-black/95 via-black/60 to-transparent transition-opacity duration-200 md:block", showControls ? "opacity-100" : "opacity-0 pointer-events-none")}>
-          <div ref={seekBarRef} className="group/seek relative mb-2 flex items-center gap-2" role="slider" aria-label="Seek" aria-valuenow={Math.round(current)} aria-valuemin={0} aria-valuemax={Math.round(duration)} tabIndex={0}>
+          <div className="group/seek relative mb-2 flex items-center gap-2">
             <span className="text-[11px] tabular-nums text-white/90 w-12 text-right">{fmt(current)}</span>
-            <div className="relative flex-1 h-4 cursor-pointer flex items-center" onClick={(e) => { const rect = e.currentTarget.getBoundingClientRect(); seekFromPosition(e.clientX + rect.left - rect.left); }}>
+            <div className="relative flex-1 h-4 cursor-pointer flex items-center touch-none" onPointerDown={onSeekPointerDown} onPointerMove={onSeekPointerMove} onPointerUp={onSeekPointerUp} role="slider" aria-label="Seek" aria-valuenow={Math.round(current)} aria-valuemin={0} aria-valuemax={Math.round(duration)} tabIndex={0}>
               <div className="relative h-1.5 w-full rounded-full bg-white/20 overflow-hidden">
                 {bufferedPct > 0 && <div className="absolute top-0 left-0 h-full bg-white/35" style={{ width: `${bufferedPct}%` }} />}
                 <div className="absolute top-0 left-0 h-full bg-red-600 rounded-full" style={{ width: `${progressPct}%` }} />

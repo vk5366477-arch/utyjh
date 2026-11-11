@@ -323,10 +323,9 @@ function LectureList({
           <div className="flex gap-3.5">
             <button
               onClick={() => onPlay(l)}
-              className="relative w-32 sm:w-44 aspect-video rounded-2xl overflow-hidden shrink-0 group border border-white/10 cursor-pointer"
+              className="relative w-28 sm:w-36 aspect-square rounded-2xl overflow-hidden shrink-0 group border border-white/10 cursor-pointer"
               aria-label={`Play ${l.title}`}
             >
-              { }
               <img
                 src={l.thumbnail || "/logo.png"}
                 alt=""
