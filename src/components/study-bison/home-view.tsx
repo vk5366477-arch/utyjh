@@ -13,6 +13,7 @@ import {
   Play,
   Clock,
   CalendarDays,
+  CalendarPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -243,49 +244,109 @@ export function HomeView() {
 function LivePreviewCard({ liveClass, onOpen }: { liveClass: LiveClass; onOpen: () => void }) {
   const isLive = liveClass.status === "live";
   const isEnded = liveClass.status === "ended";
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (liveClass.status !== "upcoming") return;
+    const id = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(id);
+  }, [liveClass.status]);
+
+  const startMs = new Date(liveClass.startTime).getTime();
+  const countdown = liveClass.status === "upcoming" && !Number.isNaN(startMs) && startMs > now
+    ? formatCountdown(startMs - now)
+    : "";
+
   return (
-    <GlassCard hover className="w-56 shrink-0 snap-start overflow-hidden rounded-2xl sm:w-64">
+    <GlassCard hover className="w-52 shrink-0 snap-start overflow-hidden rounded-xl sm:w-56">
       <button
         type="button"
         onClick={onOpen}
         className="group flex w-full cursor-pointer flex-col text-left"
       >
-        <div className="relative aspect-square w-full overflow-hidden bg-ink-950">
-          <SafeImage
-            src={liveClass.thumbnail}
-            alt=""
-            className="absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-xl"
-          />
+        <div className="relative aspect-video w-full overflow-hidden bg-muted">
           <SafeImage
             src={liveClass.thumbnail}
             alt={liveClass.title}
-            className="relative h-full w-full object-contain transition-transform duration-500 group-hover:scale-105"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
           <span className="absolute inset-0 flex items-center justify-center bg-ink-950/20 transition-colors duration-200 group-hover:bg-ink-950/35">
-            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-transform duration-200 group-hover:scale-110">
-              <Play size={16} className="ml-0.5" />
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-transform duration-200 group-hover:scale-110">
+              <Play size={13} className="ml-0.5" />
             </span>
           </span>
         </div>
-        <div className="min-w-0 space-y-2 p-4">
-          <div className="flex flex-wrap items-center gap-2">
-            {isLive ? (
-              <GlassBadge tone="danger"><Radio size={10} /> Live</GlassBadge>
-            ) : isEnded ? (
-              <GlassBadge tone="neutral">Ended</GlassBadge>
-            ) : (
-              <GlassBadge tone="warning"><Clock size={10} /> Upcoming</GlassBadge>
-            )}
-            <span className="truncate text-xs text-muted-foreground">{liveClass.batchName}</span>
-          </div>
+        <div className="min-w-0 space-y-1.5 p-3">
+          {isLive ? (
+            <GlassBadge tone="danger"><Radio size={10} /> Live</GlassBadge>
+          ) : isEnded ? (
+            <GlassBadge tone="neutral">Ended</GlassBadge>
+          ) : (
+            <GlassBadge tone="warning"><Clock size={10} /> Upcoming</GlassBadge>
+          )}
           <p className="line-clamp-2 text-sm font-semibold leading-snug text-foreground">{liveClass.title}</p>
+          <p className="truncate text-xs text-muted-foreground">{liveClass.batchName}</p>
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <CalendarDays size={12} /> {fmtTime(liveClass.startTime)}
           </p>
+          {countdown && <p className="text-xs font-semibold text-primary">Starts in {countdown}</p>}
         </div>
       </button>
+      <div className="flex justify-end border-t border-border px-2 py-1.5">
+        <button
+          type="button"
+          onClick={() => downloadClassCalendar(liveClass)}
+          className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <CalendarPlus size={13} /> Add to calendar
+        </button>
+      </div>
     </GlassCard>
   );
+}
+
+function formatCountdown(ms: number): string {
+  const totalMinutes = Math.max(1, Math.round(ms / 60000));
+  if (totalMinutes < 60) return `${totalMinutes}m`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours < 24) return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
+  return `${Math.floor(hours / 24)}d ${hours % 24}h`;
+}
+
+function toIcsDate(date: Date): string {
+  return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+}
+
+function escapeIcs(text: string): string {
+  return text.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
+}
+
+function downloadClassCalendar(c: LiveClass) {
+  const start = new Date(c.startTime);
+  if (Number.isNaN(start.getTime())) return;
+  const parsedEnd = new Date(c.endTime);
+  const end = Number.isNaN(parsedEnd.getTime()) ? new Date(start.getTime() + 60 * 60 * 1000) : parsedEnd;
+  const ics = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Quantica Digital//Classes//EN",
+    "BEGIN:VEVENT",
+    `UID:${c.batchId}-${c.id}@quantica`,
+    `DTSTAMP:${toIcsDate(new Date())}`,
+    `DTSTART:${toIcsDate(start)}`,
+    `DTEND:${toIcsDate(end)}`,
+    `SUMMARY:${escapeIcs(c.title)}`,
+    `DESCRIPTION:${escapeIcs(c.batchName)}`,
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
+  const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${c.title.replace(/[^a-z0-9]+/gi, "-").slice(0, 60) || "class"}.ics`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 function fmtTime(iso?: string): string {
