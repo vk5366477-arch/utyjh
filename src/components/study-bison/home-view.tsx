@@ -13,7 +13,7 @@ import {
   Play,
   Clock,
   CalendarDays,
-  CalendarPlus,
+  Timer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -241,21 +241,60 @@ export function HomeView() {
   );
 }
 
+type CountdownParts = {
+  d: number;
+  h: number;
+  m: number;
+  s: number;
+  label: string;
+  urgency: "far" | "near" | "imminent" | "live";
+};
+
+function diffToParts(ms: number): CountdownParts {
+  const total = Math.max(0, ms);
+  const s = Math.floor(total / 1000) % 60;
+  const m = Math.floor(total / 60000) % 60;
+  const h = Math.floor(total / 3600000) % 24;
+  const d = Math.floor(total / 86400000);
+  const minutesTotal = total / 60000;
+  let urgency: CountdownParts["urgency"] = "far";
+  if (minutesTotal <= 5) urgency = "imminent";
+  else if (minutesTotal <= 60) urgency = "near";
+  const label =
+    d > 0 ? `${d}d ${h}h ${m}m`
+    : h > 0 ? `${h}h ${m}m ${s}s`
+    : m > 0 ? `${m}m ${s}s`
+    : `${s}s`;
+  return { d, h, m, s, label, urgency };
+}
+
+function urgencyClasses(u: CountdownParts["urgency"]): string {
+  switch (u) {
+    case "imminent":
+      return "bg-red-500/15 text-red-500 ring-1 ring-red-500/30";
+    case "near":
+      return "bg-amber-500/15 text-amber-600 ring-1 ring-amber-500/25";
+    case "far":
+    default:
+      return "bg-emerald-500/15 text-emerald-600 ring-1 ring-emerald-500/25";
+  }
+}
+
 function LivePreviewCard({ liveClass, onOpen }: { liveClass: LiveClass; onOpen: () => void }) {
   const isLive = liveClass.status === "live";
   const isEnded = liveClass.status === "ended";
+  const isUpcoming = liveClass.status === "upcoming";
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    if (liveClass.status !== "upcoming") return;
-    const id = setInterval(() => setNow(Date.now()), 30000);
+    if (!isUpcoming) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [liveClass.status]);
+  }, [isUpcoming]);
 
   const startMs = new Date(liveClass.startTime).getTime();
-  const countdown = liveClass.status === "upcoming" && !Number.isNaN(startMs) && startMs > now
-    ? formatCountdown(startMs - now)
-    : "";
+  const remaining = isUpcoming && !Number.isNaN(startMs) && startMs > now ? startMs - now : 0;
+  const cd = remaining > 0 ? diffToParts(remaining) : null;
 
   return (
     <GlassCard hover className="w-52 shrink-0 snap-start overflow-hidden rounded-xl sm:w-56">
@@ -270,6 +309,11 @@ function LivePreviewCard({ liveClass, onOpen }: { liveClass: LiveClass; onOpen: 
             alt={liveClass.title}
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
+          {isLive && (
+            <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm">
+              <Radio size={9} /> Live
+            </span>
+          )}
           <span className="absolute inset-0 flex items-center justify-center bg-ink-950/20 transition-colors duration-200 group-hover:bg-ink-950/35">
             <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-transform duration-200 group-hover:scale-110">
               <Play size={13} className="ml-0.5" />
@@ -278,7 +322,7 @@ function LivePreviewCard({ liveClass, onOpen }: { liveClass: LiveClass; onOpen: 
         </div>
         <div className="min-w-0 space-y-1.5 p-3">
           {isLive ? (
-            <GlassBadge tone="danger"><Radio size={10} /> Live</GlassBadge>
+            <GlassBadge tone="danger"><Radio size={10} /> Live now</GlassBadge>
           ) : isEnded ? (
             <GlassBadge tone="neutral">Ended</GlassBadge>
           ) : (
@@ -289,64 +333,16 @@ function LivePreviewCard({ liveClass, onOpen }: { liveClass: LiveClass; onOpen: 
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <CalendarDays size={12} /> {fmtTime(liveClass.startTime)}
           </p>
-          {countdown && <p className="text-xs font-semibold text-primary">Starts in {countdown}</p>}
+          {cd && (
+            <div className={`flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-bold ${urgencyClasses(cd.urgency)}`}>
+              <Timer size={12} className={cd.urgency === "imminent" ? "animate-pulse" : ""} />
+              <span>Starts in {cd.label}</span>
+            </div>
+          )}
         </div>
       </button>
-      <div className="flex justify-end border-t border-border px-2 py-1.5">
-        <button
-          type="button"
-          onClick={() => downloadClassCalendar(liveClass)}
-          className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <CalendarPlus size={13} /> Add to calendar
-        </button>
-      </div>
     </GlassCard>
   );
-}
-
-function formatCountdown(ms: number): string {
-  const totalMinutes = Math.max(1, Math.round(ms / 60000));
-  if (totalMinutes < 60) return `${totalMinutes}m`;
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours < 24) return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
-  return `${Math.floor(hours / 24)}d ${hours % 24}h`;
-}
-
-function toIcsDate(date: Date): string {
-  return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-}
-
-function escapeIcs(text: string): string {
-  return text.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
-}
-
-function downloadClassCalendar(c: LiveClass) {
-  const start = new Date(c.startTime);
-  if (Number.isNaN(start.getTime())) return;
-  const parsedEnd = new Date(c.endTime);
-  const end = Number.isNaN(parsedEnd.getTime()) ? new Date(start.getTime() + 60 * 60 * 1000) : parsedEnd;
-  const ics = [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//Quantica Digital//Classes//EN",
-    "BEGIN:VEVENT",
-    `UID:${c.batchId}-${c.id}@quantica`,
-    `DTSTAMP:${toIcsDate(new Date())}`,
-    `DTSTART:${toIcsDate(start)}`,
-    `DTEND:${toIcsDate(end)}`,
-    `SUMMARY:${escapeIcs(c.title)}`,
-    `DESCRIPTION:${escapeIcs(c.batchName)}`,
-    "END:VEVENT",
-    "END:VCALENDAR",
-  ].join("\r\n");
-  const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar;charset=utf-8" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `${c.title.replace(/[^a-z0-9]+/gi, "-").slice(0, 60) || "class"}.ics`;
-  link.click();
-  URL.revokeObjectURL(url);
 }
 
 function fmtTime(iso?: string): string {
