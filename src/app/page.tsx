@@ -15,6 +15,7 @@ import { ProfileView } from "@/components/study-bison/profile-view";
 import { PdfViewerView } from "@/components/study-bison/pdf-viewer";
 import { AuthGate } from "@/components/study-bison/auth-gate";
 import { TelegramPopup } from "@/components/study-bison/telegram-popup";
+import { PlannerView } from "@/components/study-bison/planner-view";
 
 export default function Page() {
   const { view, batchId, subjectSlug, topicId, contentId } = useApp();
@@ -33,6 +34,7 @@ export default function Page() {
       topic: `${s.topicName ?? "Chapter"}${suffix}`,
       watch: `${s.lectureTitle ?? "Lecture"}${suffix}`,
       leaderboard: `Leaderboard${suffix}`,
+      planner: `Planner${suffix}`,
       profile: `Profile${suffix}`,
       pdf: `${s.lectureTitle ?? "PDF"}${suffix}`,
     };
@@ -71,6 +73,8 @@ export default function Page() {
             <LeaderboardView />
           ) : view === "profile" ? (
             <ProfileView />
+          ) : view === "planner" ? (
+            <PlannerView />
           ) : view === "batches" ? (
             <BatchesView />
           ) : view === "enrolled" ? (

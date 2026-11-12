@@ -397,7 +397,7 @@ export function WatchView({
  *  NativePlayerCore — the actual player (HLS / DASH / MP4 / YouTube)
  * =========================================================================*/
 
-function NativePlayerCore({
+export function NativePlayerCore({
   stream,
   title,
   notes,

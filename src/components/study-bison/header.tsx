@@ -6,10 +6,11 @@ import { signInWithGoogle } from "@/lib/firebase";
 import { TelegramJoinButton } from "./telegram-popup";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
-import { BookOpen, GraduationCap, Home, LogIn, Moon, Sun, Trophy, User } from "lucide-react";
+import { BookOpen, CalendarRange, GraduationCap, Home, LogIn, Moon, Sun, Trophy, User } from "lucide-react";
 
 const NAV_ITEMS: { view: ViewName; label: string; icon: React.ReactNode }[] = [
   { view: "home", label: "Today", icon: <Home size={18} /> },
+  { view: "planner", label: "Planner", icon: <CalendarRange size={18} /> },
   { view: "batches", label: "Batches", icon: <BookOpen size={18} /> },
   { view: "enrolled", label: "My batches", icon: <GraduationCap size={18} /> },
   { view: "leaderboard", label: "Ranks", icon: <Trophy size={18} /> },

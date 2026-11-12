@@ -19,7 +19,8 @@ export type ViewName =
   | "profile"
   | "pdf"
   | "batches"
-  | "enrolled";
+  | "enrolled"
+  | "planner";
 
 export interface RouteState {
   view: ViewName;
@@ -84,6 +85,8 @@ function parseHash(hash: string): RouteState {
       return { view: "batches" };
     case "enrolled":
       return { view: "enrolled" };
+    case "planner":
+      return { view: "planner" };
     case "pdf":
       return { view: "pdf", batchId: a, contentId: b };
     default:

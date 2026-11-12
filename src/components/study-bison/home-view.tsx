@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { GlassBadge, GlassButton, GlassCard, GlassSkeleton, SafeImage, EmptyState } from "./glass";
 import { ContinueWatching } from "./continue-watching";
 import { TelegramJoinButton } from "./telegram-popup";
+import { InlinePlayerModal, useInlineStream } from "./inline-player-modal";
 import {
   Radio,
   ChevronRight,
@@ -14,6 +15,7 @@ import {
   Clock,
   CalendarDays,
   Timer,
+  CalendarRange,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -143,25 +145,16 @@ export function HomeView() {
   }, [enrolledBatches, selectedBatchId]);
 
   const liveCount = liveClasses.filter((c) => c.status === "live").length;
+  const [playerClass, setPlayerClass] = useState<LiveClass | null>(null);
+  const { stream, resolving } = useInlineStream(playerClass);
 
   const openLive = async (c: LiveClass) => {
-    if (!c.id || !c.subjectSlug) {
-      navigate({ view: "batch", batchId: c.batchId, batchName: c.batchName });
+    if (c.status === "upcoming") return;
+    if (c.status === "ended" || c.status === "live") {
+      setPlayerClass(c);
       return;
     }
-    if (c.videoId) {
-      navigate({ view: "watch", batchId: c.batchId, subjectSlug: c.subjectSlug, subjectName: c.subject, batchName: c.batchName, contentId: c.id, lectureTitle: c.title, videoId: c.videoId });
-      return;
-    }
-    try {
-      const response = await fetch(`/api/batches/${c.batchId}/subjects/${encodeURIComponent(c.subjectSlug)}/schedule/${c.id}`);
-      const data = await response.json() as { success?: boolean; lecture?: { videoId?: string; videoUrl?: string; urlType?: string; title?: string } };
-      if (data.success && data.lecture) {
-        navigate({ view: "watch", batchId: c.batchId, subjectSlug: c.subjectSlug, subjectName: c.subject, batchName: c.batchName, contentId: c.id, lectureTitle: data.lecture.title || c.title, videoId: data.lecture.videoId || data.lecture.videoUrl || "", videoType: data.lecture.urlType || "youtube" });
-      }
-    } catch {
-      navigate({ view: "batch", batchId: c.batchId, batchName: c.batchName });
-    }
+    setPlayerClass(c);
   };
 
   const selectedBatch = enrolledBatches.find((batch) => batch._id === selectedBatchId);
@@ -190,13 +183,22 @@ export function HomeView() {
           <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
             <TelegramJoinButton />
             {selectedBatchId && (
-              <GlassButton
-                variant="secondary"
-                size="md"
-                onClick={() => navigate({ view: "batch", batchId: selectedBatchId, batchName: selectedBatch?.name, tab: "today" })}
-              >
-                View all classes <ChevronRight size={16} />
-              </GlassButton>
+              <>
+                <GlassButton
+                  variant="secondary"
+                  size="md"
+                  onClick={() => navigate({ view: "planner" })}
+                >
+                  <CalendarRange size={16} /> Weekly planner
+                </GlassButton>
+                <GlassButton
+                  variant="secondary"
+                  size="md"
+                  onClick={() => navigate({ view: "batch", batchId: selectedBatchId, batchName: selectedBatch?.name, tab: "today" })}
+                >
+                  View all <ChevronRight size={16} />
+                </GlassButton>
+              </>
             )}
           </div>
         </header>
@@ -237,6 +239,14 @@ export function HomeView() {
           )}
         </section>
       </div>
+
+      <InlinePlayerModal
+        open={!!playerClass}
+        onClose={() => setPlayerClass(null)}
+        stream={stream}
+        resolving={resolving}
+        title={playerClass?.title ?? ""}
+      />
     </main>
   );
 }
