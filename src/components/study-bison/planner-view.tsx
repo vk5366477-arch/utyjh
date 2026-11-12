@@ -11,8 +11,6 @@ import {
   SafeImage,
   EmptyState,
 } from "./glass";
-import { InlinePlayerModal, useInlineStream } from "./inline-player-modal";
-import type { StreamResolution } from "./native-player";
 import {
   CalendarDays,
   Clock,
@@ -22,6 +20,10 @@ import {
   Flame,
   Target,
   TrendingUp,
+  ChevronLeft,
+  ChevronRight,
+  BookOpen,
+  CircleDot,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -57,13 +59,13 @@ function classStatus(start: string, end: string): "live" | "upcoming" | "ended" 
   return "ended";
 }
 
-const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAY_NAMES_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 function startOfWeek(d: Date): Date {
   const date = new Date(d);
-  const day = date.getDay();
   date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() - day);
+  date.setDate(date.getDate() - date.getDay());
   return date;
 }
 
@@ -108,9 +110,7 @@ export function PlannerView() {
   const [allClasses, setAllClasses] = useState<LiveClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(() => Date.now());
-  const [playerClass, setPlayerClass] = useState<LiveClass | null>(null);
-
-  const { stream, resolving } = useInlineStream(playerClass);
+  const [weekOffset, setWeekOffset] = useState(0);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -130,38 +130,25 @@ export function PlannerView() {
         const data = (await catalogResponse.json()) as { success?: boolean; batches?: CatalogBatch[] };
         const catalog = data.success && Array.isArray(data.batches) ? data.batches : [];
         const enrolled = enrolledIds.map(
-          (id) =>
-            catalog.find((batch) => batch._id === id) ?? {
-              _id: id,
-              name: "Enrolled batch",
-              byName: "",
-            },
+          (id) => catalog.find((batch) => batch._id === id) ?? { _id: id, name: "Enrolled batch", byName: "" },
         );
         if (!alive) return;
         setEnrolledBatches(enrolled);
-        setSelectedBatchId((current) =>
-          enrolled.some((batch) => batch._id === current) ? current : enrolled[0]?._id ?? "",
-        );
+        setSelectedBatchId((current) => enrolled.some((batch) => batch._id === current) ? current : enrolled[0]?._id ?? "");
       } catch {
-        if (alive) {
-          setEnrolledBatches([]);
-          setSelectedBatchId("");
-        }
+        if (alive) { setEnrolledBatches([]); setSelectedBatchId(""); }
       } finally {
         if (alive) setLoading(false);
       }
     })();
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, [user, authLoading]);
 
   useEffect(() => {
     let alive = true;
     const loadWeek = async () => {
       if (!selectedBatchId || enrolledBatches.length === 0) {
-        setAllClasses([]);
-        return;
+        setAllClasses([]); return;
       }
       setLoading(true);
       const batch = enrolledBatches.find((item) => item._id === selectedBatchId);
@@ -180,24 +167,9 @@ export function PlannerView() {
           thumbnail: typeof item.thumbnail === "string" ? item.thumbnail : "",
           duration: typeof item.duration === "string" ? item.duration : "",
           videoId: typeof item.videoId === "string" ? item.videoId : "",
-          subjectSlug:
-            typeof item.subjectSlug === "string"
-              ? item.subjectSlug
-              : typeof item.subjectId === "string"
-                ? item.subjectId
-                : typeof item.batchSubjectId === "string"
-                  ? item.batchSubjectId
-                  : "",
-          subjectId:
-            typeof item.subjectId === "string"
-              ? item.subjectId
-              : typeof item.batchSubjectId === "string"
-                ? item.batchSubjectId
-                : "",
-          status: classStatus(
-            typeof item.startTime === "string" ? item.startTime : "",
-            typeof item.endTime === "string" ? item.endTime : "",
-          ),
+          subjectSlug: typeof item.subjectSlug === "string" ? item.subjectSlug : typeof item.subjectId === "string" ? item.subjectId : typeof item.batchSubjectId === "string" ? item.batchSubjectId : "",
+          subjectId: typeof item.subjectId === "string" ? item.subjectId : typeof item.batchSubjectId === "string" ? item.batchSubjectId : "",
+          status: classStatus(typeof item.startTime === "string" ? item.startTime : "", typeof item.endTime === "string" ? item.endTime : ""),
         }));
         if (alive) setAllClasses(classes);
       } catch {
@@ -207,13 +179,13 @@ export function PlannerView() {
       }
     };
     void loadWeek();
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, [enrolledBatches, selectedBatchId]);
 
-  // Group classes by day of week
-  const weekStart = startOfWeek(new Date(now));
+  const currentWeekStart = startOfWeek(new Date(now));
+  const weekStart = new Date(currentWeekStart);
+  weekStart.setDate(weekStart.getDate() + weekOffset * 7);
+
   const dayBuckets: LiveClass[][] = Array.from({ length: 7 }, () => []);
   for (const cls of allClasses) {
     const d = new Date(cls.startTime);
@@ -227,264 +199,348 @@ export function PlannerView() {
   }
 
   const todayIdx = new Date(now).getDay();
+  const isCurrentWeek = weekOffset === 0;
+  const isPastWeek = weekOffset < 0;
+
   const liveCount = allClasses.filter((c) => c.status === "live").length;
   const upcomingCount = allClasses.filter((c) => c.status === "upcoming").length;
   const completedCount = allClasses.filter((c) => c.status === "ended").length;
+  const totalThisWeek = allClasses.length;
+  const studyProgress = totalThisWeek > 0 ? Math.round((completedCount / totalThisWeek) * 100) : 0;
 
   const openPlayer = (cls: LiveClass) => {
     if (cls.status === "upcoming") return;
-    setPlayerClass(cls);
+    if (cls.videoId && cls.subjectSlug) {
+      navigate({ view: "watch", batchId: cls.batchId, subjectSlug: cls.subjectSlug, subjectName: cls.subject, batchName: cls.batchName, contentId: cls.id, lectureTitle: cls.title, videoId: cls.videoId });
+    } else {
+      navigate({ view: "batch", batchId: cls.batchId, batchName: cls.batchName, tab: "today" });
+    }
   };
+
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
 
   return (
     <main className="w-full min-w-0 flex-1 text-foreground">
       <div className="mx-auto w-full max-w-7xl space-y-8 px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
         {/* Header */}
-        <header className="sb-fade-up space-y-2 border-b border-border pb-8">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
-            Study planner
-          </p>
-          <h1 className="flex items-center gap-3 font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-            <Target size={26} className="text-primary" />
-            Weekly Schedule
-          </h1>
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            Your full week at a glance. Tap any class to watch it instantly.
-          </p>
+        <header className="sb-fade-up relative overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-surface via-surface to-accent-soft/20 p-6 sm:p-8">
+          <div className="relative z-10 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Target size={16} className="text-primary" />
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Study planner</p>
+              </div>
+              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                Weekly Schedule
+              </h1>
+              <p className="max-w-lg text-sm leading-relaxed text-muted-foreground">
+                Plan your week, track progress, and never miss a class.
+              </p>
+            </div>
+            {/* Progress ring */}
+            {totalThisWeek > 0 && (
+              <div className="flex items-center gap-4 rounded-2xl border border-border bg-surface/60 px-5 py-4 backdrop-blur-sm">
+                <ProgressRing percent={studyProgress} />
+                <div className="space-y-0.5">
+                  <p className="text-sm font-bold text-foreground">{completedCount}/{totalThisWeek} done</p>
+                  <p className="text-xs text-muted-foreground">{studyProgress}% complete</p>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-primary/8 blur-3xl" />
         </header>
 
         {/* Stats */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard
-            icon={<Radio size={18} />}
-            label="Live now"
-            value={liveCount}
-            tone="danger"
-          />
-          <StatCard
-            icon={<Clock size={18} />}
-            label="Upcoming"
-            value={upcomingCount}
-            tone="warning"
-          />
-          <StatCard
-            icon={<Flame size={18} />}
-            label="Completed"
-            value={completedCount}
-            tone="success"
-          />
-          <StatCard
-            icon={<TrendingUp size={18} />}
-            label="Total this week"
-            value={allClasses.length}
-            tone="primary"
-          />
+          <StatCard icon={<Radio size={18} />} label="Live now" value={liveCount} tone="danger" />
+          <StatCard icon={<Clock size={18} />} label="Upcoming" value={upcomingCount} tone="warning" />
+          <StatCard icon={<Flame size={18} />} label="Completed" value={completedCount} tone="success" />
+          <StatCard icon={<TrendingUp size={18} />} label="Total" value={totalThisWeek} tone="primary" />
         </div>
 
-        {/* Batch selector */}
-        {enrolledBatches.length > 0 && (
-          <label className="block w-full max-w-md">
-            <span className="mb-2 block text-sm font-semibold text-foreground">Choose a batch</span>
-            <select
-              value={selectedBatchId}
-              onChange={(event) => setSelectedBatchId(event.target.value)}
-              className="h-12 w-full cursor-pointer appearance-none rounded-xl border border-border bg-surface px-4 text-sm font-semibold text-foreground shadow-sm outline-none transition-colors duration-200 hover:border-primary/40 focus:border-primary focus:ring-2 focus:ring-primary/30"
-            >
+        {/* Batch pills + week navigation */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          {enrolledBatches.length > 1 ? (
+            <div className="flex flex-wrap items-center gap-2">
               {enrolledBatches.map((batch) => (
-                <option key={batch._id} value={batch._id}>
+                <button
+                  key={batch._id}
+                  type="button"
+                  onClick={() => setSelectedBatchId(batch._id)}
+                  className={cn(
+                    "cursor-pointer rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all duration-200",
+                    selectedBatchId === batch._id
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "border border-border bg-surface text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                  )}
+                >
                   {batch.name}
-                </option>
+                </button>
               ))}
-            </select>
-          </label>
-        )}
+            </div>
+          ) : (
+            <div />
+          )}
+
+          {/* Week nav */}
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-surface px-2 py-1.5 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setWeekOffset((w) => w - 1)}
+              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label="Previous week"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <div className="min-w-[140px] text-center">
+              <p className="text-xs font-semibold text-foreground">
+                {weekStart.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                {" – "}
+                {weekEnd.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                {isCurrentWeek ? "This week" : isPastWeek ? "Past week" : "Future week"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setWeekOffset((w) => w + 1)}
+              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label="Next week"
+            >
+              <ChevronRight size={18} />
+            </button>
+            {!isCurrentWeek && (
+              <button
+                type="button"
+                onClick={() => setWeekOffset(0)}
+                className="ml-1 cursor-pointer rounded-lg bg-accent-soft px-2.5 py-1 text-[10px] font-bold text-primary transition-colors hover:brightness-95"
+              >
+                Today
+              </button>
+            )}
+          </div>
+        </div>
 
         {/* Loading */}
         {loading ? (
           <div className="space-y-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <GlassSkeleton key={i} className="h-24" />
-            ))}
+            {Array.from({ length: 4 }).map((_, i) => <GlassSkeleton key={i} className="h-24" />)}
           </div>
         ) : allClasses.length === 0 ? (
           <EmptyState
             icon={<CalendarDays size={22} />}
-            title={enrolledBatches.length === 0 ? "No enrolled batches yet" : "No classes this week"}
-            hint={
-              enrolledBatches.length === 0
-                ? "Enroll in a batch to plan your week."
-                : "Check back later or try another batch."
-            }
+            title={enrolledBatches.length === 0 ? "No enrolled batches yet" : "No classes found"}
+            hint={enrolledBatches.length === 0 ? "Enroll in a batch to plan your week." : "Try another batch or week."}
           />
         ) : (
-          <div className="space-y-5">
-            {dayBuckets.map((bucket, dayIdx) => {
-              const dayDate = new Date(weekStart);
-              dayDate.setDate(weekStart.getDate() + dayIdx);
-              const isToday = dayIdx === todayIdx;
-
-              if (bucket.length === 0) {
+          <div className="space-y-4">
+            {/* Week day strip */}
+            <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+              {dayBuckets.map((bucket, dayIdx) => {
+                const dayDate = new Date(weekStart);
+                dayDate.setDate(weekStart.getDate() + dayIdx);
+                const isToday = isCurrentWeek && dayIdx === todayIdx;
+                const hasClasses = bucket.length > 0;
                 return (
                   <div
                     key={dayIdx}
                     className={cn(
-                      "flex items-center gap-4 rounded-xl border px-5 py-4",
-                      isToday ? "border-primary/30 bg-accent-soft/30" : "border-border bg-surface/50",
+                      "flex flex-col items-center gap-1 rounded-xl border px-1 py-2.5 transition-all sm:px-2 sm:py-3",
+                      isToday
+                        ? "border-primary/50 bg-accent-soft/30 shadow-sm"
+                        : hasClasses
+                          ? "border-border bg-surface"
+                          : "border-border/60 bg-surface/30",
                     )}
                   >
-                    <div className="flex w-28 shrink-0 flex-col">
-                      <span className="text-sm font-bold text-foreground">
-                        {DAY_NAMES[dayIdx]}
+                    <span className={cn(
+                      "text-[10px] font-bold uppercase tracking-wide sm:text-xs",
+                      isToday ? "text-primary" : "text-muted-foreground",
+                    )}>
+                      {DAY_NAMES[dayIdx]}
+                    </span>
+                    <span className={cn(
+                      "text-sm font-bold tabular-nums sm:text-base",
+                      isToday ? "text-primary" : "text-foreground",
+                    )}>
+                      {dayDate.getDate()}
+                    </span>
+                    {hasClasses ? (
+                      <span className={cn(
+                        "flex h-1.5 w-1.5 rounded-full",
+                        bucket.some((c) => c.status === "live") ? "bg-red-500" : "bg-primary/60",
+                      )} />
+                    ) : (
+                      <span className="h-1.5 w-1.5" />
+                    )}
+                    {hasClasses && (
+                      <span className="text-[9px] font-semibold text-muted-foreground sm:text-[10px]">
+                        {bucket.length}
                       </span>
-                      <span className="text-xs text-muted-foreground">
-                        {dayDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                      </span>
-                    </div>
-                    <span className="text-sm text-muted-foreground">No classes scheduled</span>
+                    )}
                   </div>
                 );
-              }
+              })}
+            </div>
 
-              return (
-                <div
-                  key={dayIdx}
-                  className={cn(
-                    "rounded-xl border overflow-hidden",
-                    isToday ? "border-primary/40 shadow-md" : "border-border",
-                  )}
-                >
+            {/* Day sections */}
+            <div className="space-y-4">
+              {dayBuckets.map((bucket, dayIdx) => {
+                const dayDate = new Date(weekStart);
+                dayDate.setDate(weekStart.getDate() + dayIdx);
+                const isToday = isCurrentWeek && dayIdx === todayIdx;
+
+                if (bucket.length === 0) return null;
+
+                return (
                   <div
+                    key={dayIdx}
                     className={cn(
-                      "flex items-center gap-3 px-5 py-3 border-b",
-                      isToday ? "border-primary/20 bg-accent-soft/40" : "border-border bg-surface/60",
+                      "rounded-2xl border overflow-hidden",
+                      isToday ? "border-primary/40 shadow-md" : "border-border",
                     )}
                   >
-                    <div className="flex flex-col">
-                      <span className="text-sm font-bold text-foreground">
-                        {DAY_NAMES[dayIdx]}
-                        {isToday && (
-                          <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold uppercase text-primary-foreground">
-                            Today
-                          </span>
-                        )}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {dayDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                        <span className="mx-1.5">·</span>
-                        {bucket.length} class{bucket.length > 1 ? "es" : ""}
-                      </span>
+                    {/* Day header */}
+                    <div className={cn(
+                      "flex items-center gap-3 px-5 py-3 border-b",
+                      isToday ? "border-primary/20 bg-accent-soft/30" : "border-border bg-surface/60",
+                    )}>
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface text-sm font-bold text-foreground shadow-sm">
+                        {dayDate.getDate()}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-bold text-foreground">
+                          {DAY_NAMES_FULL[dayIdx]}
+                          {isToday && (
+                            <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold uppercase text-primary-foreground">
+                              <CircleDot size={9} /> Today
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {dayDate.toLocaleDateString(undefined, { month: "long", day: "numeric" })}
+                          {" · "}
+                          {bucket.length} class{bucket.length > 1 ? "es" : ""}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Class rows */}
+                    <div className="divide-y divide-border">
+                      {bucket.map((cls) => {
+                        const startMs = new Date(cls.startTime).getTime();
+                        const remaining = cls.status === "upcoming" && startMs > now ? startMs - now : 0;
+                        return (
+                          <button
+                            key={`${cls.batchId}:${cls.id}`}
+                            type="button"
+                            onClick={() => openPlayer(cls)}
+                            disabled={cls.status === "upcoming"}
+                            className={cn(
+                              "group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors sm:gap-5 sm:px-5 sm:py-4",
+                              cls.status === "upcoming" ? "cursor-default" : "cursor-pointer hover:bg-muted",
+                            )}
+                          >
+                            {/* Time */}
+                            <div className="flex w-16 shrink-0 flex-col items-start sm:w-20">
+                              <span className="text-sm font-bold tabular-nums text-foreground">
+                                {formatTimeShort(cls.startTime)}
+                              </span>
+                              {cls.endTime && (
+                                <span className="text-[10px] tabular-nums text-muted-foreground">
+                                  {formatTimeShort(cls.endTime)}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Timeline dot + line */}
+                            <div className="relative hidden shrink-0 flex-col items-center self-stretch sm:flex">
+                              <span className={cn(
+                                "mt-1 h-2.5 w-2.5 rounded-full ring-2",
+                                cls.status === "live" ? "bg-red-500 ring-red-500/20" :
+                                cls.status === "ended" ? "bg-emerald-500 ring-emerald-500/20" :
+                                "bg-amber-500 ring-amber-500/20",
+                              )} />
+                              <span className="mt-1 w-px flex-1 bg-border" />
+                            </div>
+
+                            {/* Thumbnail */}
+                            <div className="relative h-12 w-16 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-14 sm:w-24">
+                              <SafeImage
+                                src={cls.thumbnail}
+                                alt={cls.title}
+                                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                              />
+                              {cls.status !== "upcoming" && (
+                                <span className="absolute inset-0 flex items-center justify-center bg-ink-950/40 transition-colors group-hover:bg-ink-950/55">
+                                  <Play size={14} className="text-white" />
+                                </span>
+                              )}
+                              {cls.status === "live" && (
+                                <span className="absolute left-1 top-1 inline-flex items-center gap-0.5 rounded bg-red-500 px-1 py-0.5 text-[8px] font-bold uppercase text-white">
+                                  <Radio size={7} /> Live
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Title */}
+                            <div className="min-w-0 flex-1">
+                              <p className={cn(
+                                "line-clamp-1 text-sm font-semibold",
+                                cls.status === "ended" ? "text-muted-foreground" : "text-foreground",
+                              )}>
+                                {cls.title}
+                              </p>
+                              <div className="mt-0.5 flex items-center gap-2">
+                                {cls.subject && (
+                                  <span className="flex items-center gap-1 truncate text-[11px] text-muted-foreground">
+                                    <BookOpen size={10} /> {cls.subject}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Status + countdown */}
+                            <div className="flex shrink-0 flex-col items-end gap-1.5">
+                              {cls.status === "live" ? (
+                                <GlassBadge tone="danger"><Radio size={9} /> Live</GlassBadge>
+                              ) : cls.status === "ended" ? (
+                                <GlassBadge tone="success"><Flame size={9} /> Done</GlassBadge>
+                              ) : (
+                                <GlassBadge tone="warning"><Clock size={9} /> Soon</GlassBadge>
+                              )}
+                              {remaining > 0 && (
+                                <div className={cn(
+                                  "hidden items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold sm:flex",
+                                  urgencyColor(urgencyFromMs(remaining)),
+                                )}>
+                                  <Timer size={9} className={urgencyFromMs(remaining) === "imminent" ? "animate-pulse" : ""} />
+                                  {diffLabel(remaining)}
+                                </div>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
-                  <div className="divide-y divide-border">
-                    {bucket.map((cls) => {
-                      const startMs = new Date(cls.startTime).getTime();
-                      const remaining =
-                        cls.status === "upcoming" && startMs > now ? startMs - now : 0;
-                      return (
-                        <button
-                          key={`${cls.batchId}:${cls.id}`}
-                          type="button"
-                          onClick={() => openPlayer(cls)}
-                          disabled={cls.status === "upcoming"}
-                          className={cn(
-                            "group flex w-full items-center gap-4 px-5 py-3 text-left transition-colors",
-                            cls.status === "upcoming"
-                              ? "cursor-default"
-                              : "cursor-pointer hover:bg-muted",
-                          )}
-                        >
-                          {/* Time column */}
-                          <div className="flex w-20 shrink-0 flex-col items-start">
-                            <span className="text-sm font-bold tabular-nums text-foreground">
-                              {formatTimeShort(cls.startTime)}
-                            </span>
-                            {cls.endTime && (
-                              <span className="text-[10px] tabular-nums text-muted-foreground">
-                                to {formatTimeShort(cls.endTime)}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Thumbnail */}
-                          <div className="relative h-12 w-20 shrink-0 overflow-hidden rounded-lg bg-muted">
-                            <SafeImage
-                              src={cls.thumbnail}
-                              alt={cls.title}
-                              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                            />
-                            {cls.status !== "upcoming" && (
-                              <span className="absolute inset-0 flex items-center justify-center bg-ink-950/30 transition-colors group-hover:bg-ink-950/45">
-                                <Play size={14} className="text-white" />
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Title + status */}
-                          <div className="min-w-0 flex-1">
-                            <p className="line-clamp-1 text-sm font-semibold text-foreground">
-                              {cls.title}
-                            </p>
-                            <p className="truncate text-xs text-muted-foreground">{cls.subject}</p>
-                          </div>
-
-                          {/* Status badge */}
-                          <div className="shrink-0">
-                            {cls.status === "live" ? (
-                              <GlassBadge tone="danger">
-                                <Radio size={10} /> Live
-                              </GlassBadge>
-                            ) : cls.status === "ended" ? (
-                              <GlassBadge tone="neutral">Ended</GlassBadge>
-                            ) : (
-                              <GlassBadge tone="warning">
-                                <Clock size={10} /> Soon
-                              </GlassBadge>
-                            )}
-                          </div>
-
-                          {/* Countdown */}
-                          {remaining > 0 && (
-                            <div
-                              className={cn(
-                                "hidden shrink-0 items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-bold sm:flex",
-                                urgencyColor(urgencyFromMs(remaining)),
-                              )}
-                            >
-                              <Timer size={11} className={urgencyFromMs(remaining) === "imminent" ? "animate-pulse" : ""} />
-                              {diffLabel(remaining)}
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
-
-      <InlinePlayerModal
-        open={!!playerClass}
-        onClose={() => setPlayerClass(null)}
-        stream={stream}
-        resolving={resolving}
-        title={playerClass?.title ?? ""}
-      />
     </main>
   );
 }
 
 function StatCard({
-  icon,
-  label,
-  value,
-  tone,
+  icon, label, value, tone,
 }: {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
+  icon: React.ReactNode; label: string; value: number;
   tone: "danger" | "warning" | "success" | "primary";
 }) {
   const toneClasses = {
@@ -503,5 +559,26 @@ function StatCard({
         <p className="text-xs text-muted-foreground">{label}</p>
       </div>
     </GlassCard>
+  );
+}
+
+function ProgressRing({ percent }: { percent: number }) {
+  const radius = 22;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (percent / 100) * circumference;
+  return (
+    <div className="relative flex h-14 w-14 items-center justify-center">
+      <svg className="h-14 w-14 -rotate-90" viewBox="0 0 56 56">
+        <circle cx="28" cy="28" r={radius} fill="none" stroke="currentColor" strokeWidth="4" className="text-border" />
+        <circle
+          cx="28" cy="28" r={radius} fill="none" stroke="currentColor" strokeWidth="4"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          className="text-primary transition-all duration-500"
+        />
+      </svg>
+      <span className="absolute text-sm font-bold text-foreground">{percent}%</span>
+    </div>
   );
 }
