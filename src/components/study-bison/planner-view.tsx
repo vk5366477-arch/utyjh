@@ -24,7 +24,10 @@ import {
   ChevronRight,
   BookOpen,
   CircleDot,
+  Ban,
+  PauseCircle,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 interface CatalogBatch {
@@ -32,6 +35,8 @@ interface CatalogBatch {
   name: string;
   byName: string;
 }
+
+type ClassMetaStatus = "cancelled" | "postponed" | "";
 
 interface LiveClass {
   id: string;
@@ -47,6 +52,7 @@ interface LiveClass {
   subjectSlug: string;
   subjectId: string;
   status: "live" | "upcoming" | "ended";
+  metaStatus: ClassMetaStatus;
 }
 
 function classStatus(start: string, end: string): "live" | "upcoming" | "ended" {
@@ -61,6 +67,14 @@ function classStatus(start: string, end: string): "live" | "upcoming" | "ended" 
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const DAY_NAMES_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+function parseMetaStatus(raw: unknown): ClassMetaStatus {
+  if (typeof raw !== "string") return "";
+  const s = raw.toLowerCase().trim();
+  if (s === "cancelled" || s === "canceled" || s === "cancel") return "cancelled";
+  if (s === "postponed" || s === "reschedule" || s === "rescheduled" || s === "postpone") return "postponed";
+  return "";
+}
 
 function startOfWeek(d: Date): Date {
   const date = new Date(d);
@@ -170,6 +184,7 @@ export function PlannerView() {
           subjectSlug: typeof item.subjectSlug === "string" ? item.subjectSlug : typeof item.subjectId === "string" ? item.subjectId : typeof item.batchSubjectId === "string" ? item.batchSubjectId : "",
           subjectId: typeof item.subjectId === "string" ? item.subjectId : typeof item.batchSubjectId === "string" ? item.batchSubjectId : "",
           status: classStatus(typeof item.startTime === "string" ? item.startTime : "", typeof item.endTime === "string" ? item.endTime : ""),
+          metaStatus: parseMetaStatus(item.apiStatus),
         }));
         if (alive) setAllClasses(classes);
       } catch {
@@ -208,8 +223,31 @@ export function PlannerView() {
   const totalThisWeek = allClasses.length;
   const studyProgress = totalThisWeek > 0 ? Math.round((completedCount / totalThisWeek) * 100) : 0;
 
+  const { toast } = useToast();
+
   const openPlayer = (cls: LiveClass) => {
-    if (cls.status === "upcoming") return;
+    if (cls.metaStatus === "cancelled") {
+      toast({
+        title: "Class cancelled",
+        description: `"${cls.title}" has been cancelled by the educator.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    if (cls.metaStatus === "postponed") {
+      toast({
+        title: "Class postponed",
+        description: `"${cls.title}" has been postponed. Check back for the new schedule.`,
+      });
+      return;
+    }
+    if (cls.status === "upcoming") {
+      toast({
+        title: "Class not started",
+        description: `"${cls.title}" hasn't started yet. Check the countdown for the start time.`,
+      });
+      return;
+    }
     if (cls.videoId && cls.subjectSlug) {
       navigate({ view: "watch", batchId: cls.batchId, subjectSlug: cls.subjectSlug, subjectName: cls.subject, batchName: cls.batchName, contentId: cls.id, lectureTitle: cls.title, videoId: cls.videoId });
     } else {
@@ -433,20 +471,24 @@ export function PlannerView() {
                       {bucket.map((cls) => {
                         const startMs = new Date(cls.startTime).getTime();
                         const remaining = cls.status === "upcoming" && startMs > now ? startMs - now : 0;
+                        const isCancelled = cls.metaStatus === "cancelled";
+                        const isPostponed = cls.metaStatus === "postponed";
+                        const isDimmed = isCancelled || isPostponed;
+                        const clickable = cls.metaStatus === "" && cls.status !== "upcoming";
                         return (
                           <button
                             key={`${cls.batchId}:${cls.id}`}
                             type="button"
                             onClick={() => openPlayer(cls)}
-                            disabled={cls.status === "upcoming"}
                             className={cn(
                               "group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors sm:gap-5 sm:px-5 sm:py-4",
-                              cls.status === "upcoming" ? "cursor-default" : "cursor-pointer hover:bg-muted",
+                              clickable ? "cursor-pointer hover:bg-muted" : "cursor-default",
+                              isDimmed && "opacity-50",
                             )}
                           >
                             {/* Time */}
                             <div className="flex w-16 shrink-0 flex-col items-start sm:w-20">
-                              <span className="text-sm font-bold tabular-nums text-foreground">
+                              <span className={cn("text-sm font-bold tabular-nums", isDimmed ? "text-muted-foreground" : "text-foreground")}>
                                 {formatTimeShort(cls.startTime)}
                               </span>
                               {cls.endTime && (
@@ -460,6 +502,8 @@ export function PlannerView() {
                             <div className="relative hidden shrink-0 flex-col items-center self-stretch sm:flex">
                               <span className={cn(
                                 "mt-1 h-2.5 w-2.5 rounded-full ring-2",
+                                isCancelled ? "bg-red-600 ring-red-600/20" :
+                                isPostponed ? "bg-amber-600 ring-amber-600/20" :
                                 cls.status === "live" ? "bg-red-500 ring-red-500/20" :
                                 cls.status === "ended" ? "bg-emerald-500 ring-emerald-500/20" :
                                 "bg-amber-500 ring-amber-500/20",
@@ -472,16 +516,26 @@ export function PlannerView() {
                               <SafeImage
                                 src={cls.thumbnail}
                                 alt={cls.title}
-                                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                className={cn("h-full w-full object-cover transition-transform duration-300", clickable && "group-hover:scale-105")}
                               />
-                              {cls.status !== "upcoming" && (
+                              {clickable && (
                                 <span className="absolute inset-0 flex items-center justify-center bg-ink-950/40 transition-colors group-hover:bg-ink-950/55">
                                   <Play size={14} className="text-white" />
                                 </span>
                               )}
-                              {cls.status === "live" && (
+                              {cls.status === "live" && !isDimmed && (
                                 <span className="absolute left-1 top-1 inline-flex items-center gap-0.5 rounded bg-red-500 px-1 py-0.5 text-[8px] font-bold uppercase text-white">
                                   <Radio size={7} /> Live
+                                </span>
+                              )}
+                              {isCancelled && (
+                                <span className="absolute left-1 top-1 inline-flex items-center gap-0.5 rounded bg-red-600 px-1 py-0.5 text-[8px] font-bold uppercase text-white">
+                                  <Ban size={7} /> Off
+                                </span>
+                              )}
+                              {isPostponed && (
+                                <span className="absolute left-1 top-1 inline-flex items-center gap-0.5 rounded bg-amber-600 px-1 py-0.5 text-[8px] font-bold uppercase text-white">
+                                  <PauseCircle size={7} /> Delayed
                                 </span>
                               )}
                             </div>
@@ -490,7 +544,7 @@ export function PlannerView() {
                             <div className="min-w-0 flex-1">
                               <p className={cn(
                                 "line-clamp-1 text-sm font-semibold",
-                                cls.status === "ended" ? "text-muted-foreground" : "text-foreground",
+                                isDimmed ? "text-muted-foreground line-through" : cls.status === "ended" ? "text-muted-foreground" : "text-foreground",
                               )}>
                                 {cls.title}
                               </p>
@@ -505,14 +559,18 @@ export function PlannerView() {
 
                             {/* Status + countdown */}
                             <div className="flex shrink-0 flex-col items-end gap-1.5">
-                              {cls.status === "live" ? (
+                              {isCancelled ? (
+                                <GlassBadge tone="danger"><Ban size={9} /> Cancelled</GlassBadge>
+                              ) : isPostponed ? (
+                                <GlassBadge tone="warning"><PauseCircle size={9} /> Postponed</GlassBadge>
+                              ) : cls.status === "live" ? (
                                 <GlassBadge tone="danger"><Radio size={9} /> Live</GlassBadge>
                               ) : cls.status === "ended" ? (
                                 <GlassBadge tone="success"><Flame size={9} /> Done</GlassBadge>
                               ) : (
                                 <GlassBadge tone="warning"><Clock size={9} /> Soon</GlassBadge>
                               )}
-                              {remaining > 0 && (
+                              {remaining > 0 && !isDimmed && (
                                 <div className={cn(
                                   "hidden items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold sm:flex",
                                   urgencyColor(urgencyFromMs(remaining)),

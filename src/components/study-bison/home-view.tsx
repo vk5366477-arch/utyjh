@@ -16,7 +16,10 @@ import {
   Timer,
   CalendarRange,
   Sparkles,
+  Ban,
+  PauseCircle,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 interface CatalogBatch {
@@ -28,6 +31,8 @@ interface CatalogBatch {
   previewImage?: string;
   type?: string;
 }
+
+type ClassMetaStatus = "cancelled" | "postponed" | "";
 
 interface LiveClass {
   id: string;
@@ -43,6 +48,19 @@ interface LiveClass {
   subjectSlug: string;
   subjectId: string;
   status: "live" | "upcoming" | "ended";
+  metaStatus: ClassMetaStatus;
+}
+
+function parseMetaStatus(raw: unknown): ClassMetaStatus {
+  if (typeof raw !== "string") return "";
+  const s = raw.toLowerCase().trim();
+  if (s === "cancelled" || s === "canceled" || s === "cancel") return "cancelled";
+  if (s === "postponed" || s === "reschedule" || s === "rescheduled" || s === "postpone") return "postponed";
+  return "";
+}
+
+function isClassClickable(c: LiveClass): boolean {
+  return c.metaStatus === "" && c.status !== "upcoming";
 }
 
 function classStatus(start: string, end: string): "live" | "upcoming" | "ended" {
@@ -118,6 +136,7 @@ export function HomeView() {
           subjectSlug: typeof item.subjectSlug === "string" ? item.subjectSlug : typeof item.subjectId === "string" ? item.subjectId : typeof item.batchSubjectId === "string" ? item.batchSubjectId : "",
           subjectId: typeof item.subjectId === "string" ? item.subjectId : typeof item.batchSubjectId === "string" ? item.batchSubjectId : "",
           status: classStatus(typeof item.startTime === "string" ? item.startTime : "", typeof item.endTime === "string" ? item.endTime : ""),
+          metaStatus: parseMetaStatus(item.apiStatus),
         }));
         classes.sort((a, b) => {
           const order = { live: 0, upcoming: 1, ended: 2 };
@@ -138,7 +157,31 @@ export function HomeView() {
   const liveCount = liveClasses.filter((c) => c.status === "live").length;
   const upcomingCount = liveClasses.filter((c) => c.status === "upcoming").length;
 
+  const { toast } = useToast();
+
   const openLive = (c: LiveClass) => {
+    if (c.metaStatus === "cancelled") {
+      toast({
+        title: "Class cancelled",
+        description: `\"${c.title}\" has been cancelled by the educator.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    if (c.metaStatus === "postponed") {
+      toast({
+        title: "Class postponed",
+        description: `\"${c.title}\" has been postponed. Check back for the new schedule.`,
+      });
+      return;
+    }
+    if (c.status === "upcoming") {
+      toast({
+        title: "Class not started",
+        description: `\"${c.title}\" hasn't started yet. Check the countdown for the start time.`,
+      });
+      return;
+    }
     if (!c.id || !c.subjectSlug) {
       navigate({ view: "batch", batchId: c.batchId, batchName: c.batchName });
       return;
@@ -368,21 +411,25 @@ function LivePreviewCard({ liveClass, onOpen }: { liveClass: LiveClass; onOpen: 
   const isLive = liveClass.status === "live";
   const isEnded = liveClass.status === "ended";
   const isUpcoming = liveClass.status === "upcoming";
+  const isCancelled = liveClass.metaStatus === "cancelled";
+  const isPostponed = liveClass.metaStatus === "postponed";
+  const isDimmed = isCancelled || isPostponed;
+  const clickable = isClassClickable(liveClass);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    if (!isUpcoming) return;
+    if (!isUpcoming || isDimmed) return;
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [isUpcoming]);
+  }, [isUpcoming, isDimmed]);
 
   const startMs = new Date(liveClass.startTime).getTime();
   const remaining = isUpcoming && !Number.isNaN(startMs) && startMs > now ? startMs - now : 0;
   const cd = remaining > 0 ? diffToParts(remaining) : null;
 
   return (
-    <GlassCard hover className="group flex flex-col overflow-hidden rounded-2xl">
-      <button type="button" onClick={onOpen} className="flex w-full cursor-pointer flex-col text-left">
+    <GlassCard hover={clickable} className={cn("group flex flex-col overflow-hidden rounded-2xl", isDimmed && "opacity-60")}>
+      <button type="button" onClick={onOpen} className={cn("flex w-full flex-col text-left", clickable ? "cursor-pointer" : "cursor-default")}>
         <div className="relative aspect-video w-full overflow-hidden bg-muted">
           <SafeImage
             src={liveClass.thumbnail}
@@ -391,22 +438,34 @@ function LivePreviewCard({ liveClass, onOpen }: { liveClass: LiveClass; onOpen: 
           />
           {/* Gradient overlay */}
           <div className="absolute inset-0 bg-gradient-to-t from-ink-950/60 via-transparent to-transparent" />
-          {isLive && (
+          {isCancelled && (
+            <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-lg">
+              <Ban size={9} /> Cancelled
+            </span>
+          )}
+          {isPostponed && (
+            <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-amber-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-lg">
+              <PauseCircle size={9} /> Postponed
+            </span>
+          )}
+          {isLive && !isDimmed && (
             <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-lg shadow-red-500/30">
               <Radio size={9} className="animate-pulse" /> Live
             </span>
           )}
-          {isEnded && (
+          {isEnded && !isDimmed && (
             <span className="absolute right-2.5 top-2.5 rounded-full bg-ink-950/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/80 backdrop-blur-sm">
               Replay
             </span>
           )}
-          {/* Play button */}
-          <span className="absolute inset-0 flex items-center justify-center">
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-md shadow-lg transition-all duration-200 group-hover:scale-110 group-hover:bg-white/25">
-              <Play size={16} className="ml-0.5" />
+          {/* Play button — hidden for cancelled/postponed */}
+          {!isDimmed && (
+            <span className="absolute inset-0 flex items-center justify-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-md shadow-lg transition-all duration-200 group-hover:scale-110 group-hover:bg-white/25">
+                <Play size={16} className="ml-0.5" />
+              </span>
             </span>
-          </span>
+          )}
           {/* Time badge */}
           <span className="absolute bottom-2.5 left-2.5 flex items-center gap-1 rounded-lg bg-ink-950/70 px-2 py-0.5 text-[10px] font-semibold text-white/90 backdrop-blur-sm">
             <CalendarDays size={10} /> {fmtTime(liveClass.startTime)}
@@ -414,7 +473,11 @@ function LivePreviewCard({ liveClass, onOpen }: { liveClass: LiveClass; onOpen: 
         </div>
         <div className="min-w-0 space-y-2 p-3.5">
           <div className="flex items-center gap-2">
-            {isLive ? (
+            {isCancelled ? (
+              <GlassBadge tone="danger"><Ban size={9} /> Cancelled</GlassBadge>
+            ) : isPostponed ? (
+              <GlassBadge tone="warning"><PauseCircle size={9} /> Postponed</GlassBadge>
+            ) : isLive ? (
               <GlassBadge tone="danger"><Radio size={9} /> Live</GlassBadge>
             ) : isEnded ? (
               <GlassBadge tone="neutral">Ended</GlassBadge>
@@ -425,8 +488,8 @@ function LivePreviewCard({ liveClass, onOpen }: { liveClass: LiveClass; onOpen: 
               <span className="truncate text-[11px] font-medium text-muted-foreground">{liveClass.subject}</span>
             )}
           </div>
-          <p className="line-clamp-2 text-sm font-semibold leading-snug text-foreground">{liveClass.title}</p>
-          {cd && (
+          <p className={cn("line-clamp-2 text-sm font-semibold leading-snug", isDimmed ? "text-muted-foreground line-through" : "text-foreground")}>{liveClass.title}</p>
+          {cd && !isDimmed && (
             <div className={cn("flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-bold", urgencyClasses(cd.urgency))}>
               <Timer size={11} className={cd.urgency === "imminent" ? "animate-pulse" : ""} />
               <span>Starts in {cd.label}</span>

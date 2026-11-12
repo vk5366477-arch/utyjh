@@ -14,6 +14,7 @@ type TodayItem = {
     endTime?: string;
     urlType?: string;
     url?: string;
+    status?: string;
     batchSubjectId?: string;
     subjectSlug?: string;
     subjectId?: string;
@@ -84,6 +85,7 @@ export async function GET(
           thumbnail: c.videoDetails?.image ?? "",
           duration: c.videoDetails?.duration ?? "",
           videoId: c.url ?? "",
+          apiStatus: c.status ?? "",
         };
       }),
     });
